@@ -1,0 +1,12 @@
+# 依赖
+node_modules/
+
+# 本地实验目录
+jstest/
+_edgeprofile/
+
+# 本地素材与运行产物
+# 仓库里不该出现任何人的真实文档。自检样本用 node test/make-sample.js 现场生成。
+_*
+*.docx
+report_*.md

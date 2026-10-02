@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>文档体检 · 中文办公文档格式检查</title>
+<style>
+:root{
+  --bg:#f6f7f9; --card:#fff; --ink:#16181d; --ink2:#5b6270; --ink3:#8b93a1;
+  --line:#e3e6ea; --line2:#cdd2da;
+  --green:#15803d; --green-bg:#eafaf0; --green-line:#a7e3bf;
+  --yellow:#a16207; --yellow-bg:#fdf6e3; --yellow-line:#f0d99a;
+  --red:#b91c1c; --red-bg:#fdf0f0; --red-line:#f0b6b6;
+  --accent:#1d4ed8; --accent-bg:#eef2ff;
+  --r:10px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:var(--bg); color:var(--ink);
+  font:14px/1.65 -apple-system,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+  padding-bottom:88px;
+}
+a{color:var(--accent)}
+code{font-family:Consolas,"Courier New",monospace;background:#eef0f3;padding:1px 5px;border-radius:4px;font-size:.92em}
+
+/* ---------- 顶部 ---------- */
+header{padding:26px 24px 18px;max-width:960px;margin:0 auto}
+h1{margin:0;font-size:21px;letter-spacing:.3px}
+header p{margin:6px 0 0;color:var(--ink2);font-size:13px}
+
+/* ---------- 拖放区 ---------- */
+main{max-width:960px;margin:0 auto;padding:0 24px}
+#drop{
+  border:2px dashed var(--line2);border-radius:14px;background:var(--card);
+  padding:52px 24px;text-align:center;cursor:pointer;transition:.15s;margin-bottom:20px;
+}
+#drop:hover,#drop.over{border-color:var(--accent);background:var(--accent-bg)}
+#drop .big{font-size:16px;font-weight:600;margin-bottom:6px}
+#drop .sub{color:var(--ink3);font-size:12.5px;line-height:1.9}
+#drop .sub b{color:var(--ink2)}
+input[type=file]{display:none}
+
+/* ---------- 文件信息条 ---------- */
+#filebar{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:12px 16px;margin-bottom:14px;font-size:13px;
+}
+#filebar .name{font-weight:600}
+#filebar .meta{color:var(--ink3)}
+#filebar .spacer{flex:1}
+.btn{
+  border:1px solid var(--line2);background:#fff;color:var(--ink);
+  padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;
+}
+.btn:hover{background:#f2f4f7}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:500}
+.btn.primary:hover{background:#1a44c2}
+.btn.primary:disabled{background:#b9c2d6;border-color:#b9c2d6;cursor:not-allowed}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--ink2);text-decoration:underline;text-underline-offset:3px}
+.btn.ghost:hover{background:#eef0f3}
+
+/* ---------- 总览 ---------- */
+#summary{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.stat{
+  flex:1;min-width:150px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);padding:12px 16px;
+}
+.stat .n{font-size:22px;font-weight:700;line-height:1.25}
+.stat .l{font-size:12px;color:var(--ink3)}
+.stat.g .n{color:var(--green)} .stat.y .n{color:var(--yellow)} .stat.r .n{color:var(--red)}
+
+/* ---------- 规则分组 ---------- */
+.group{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  margin-bottom:12px;overflow:hidden;
+}
+.group > .head{
+  display:flex;align-items:center;gap:10px;padding:12px 16px;
+  border-bottom:1px solid var(--line);cursor:pointer;user-select:none;
+}
+.group > .head:hover{background:#fafbfc}
+.group .caret{color:var(--ink3);font-size:11px;width:10px;transition:.15s}
+.group.collapsed .caret{transform:rotate(-90deg)}
+.group.collapsed .body{display:none}
+.group .title{font-weight:600}
+.pill{
+  font-size:11px;padding:2px 9px;border-radius:99px;font-weight:600;white-space:nowrap;
+}
+.pill.g{background:var(--green-bg);color:var(--green);border:1px solid var(--green-line)}
+.pill.y{background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-line)}
+.pill.r{background:var(--red-bg);color:var(--red);border:1px solid var(--red-line)}
+.group .count{margin-left:auto;color:var(--ink3);font-size:12.5px}
+.note{
+  padding:10px 16px;background:#fafbfc;border-bottom:1px solid var(--line);
+  color:var(--ink2);font-size:12.5px;line-height:1.7;
+}
+.note b{color:var(--ink)}
+/* 折叠时说明成了最后一行，它自己的下边框会和卡片边框叠成两条线 */
+.group.collapsed .note{border-bottom:none}
+
+/* ---------- 问题行 ---------- */
+.item{display:flex;gap:10px;padding:10px 16px;border-bottom:1px solid #f0f2f5;align-items:flex-start}
+.item:last-child{border-bottom:none}
+.item:hover{background:#fafbfc}
+.item input[type=checkbox]{margin-top:3px;width:15px;height:15px;flex:none;cursor:pointer;accent-color:var(--accent)}
+.item .nocheck{width:15px;flex:none;text-align:center;color:var(--ink3);font-size:12px;margin-top:2px}
+.item .body{flex:1;min-width:0}
+.item .where{font-size:11.5px;color:var(--ink3);margin-bottom:2px}
+/* 同一句里的多处修改合成一行时挂的小标签。得让用户一眼看出
+   这一行不是「一处」，而是好几处一起改——否则他会以为工具漏查了。 */
+.item .merged{margin-left:6px;padding:1px 6px;border-radius:4px;background:#eef2f7;color:var(--ink2);font-size:10.5px;cursor:help}
+.item .line{word-break:break-word;font-size:13.5px;line-height:1.75}
+.item .line + .line{margin-top:3px}
+mark{background:#ffe9a8;color:inherit;padding:1px 2px;border-radius:3px;font-weight:600}
+mark.new{background:#cdf3dc}
+mark.del{background:#fbdcdc;text-decoration:line-through;opacity:.75}
+.arrow{color:var(--ink3);margin-right:4px}
+.empty{padding:40px;text-align:center;color:var(--green);font-size:15px;background:var(--card);border:1px solid var(--line);border-radius:var(--r)}
+
+/* ---------- 底部条 ---------- */
+#bar{
+  position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.97);
+  border-top:1px solid var(--line);backdrop-filter:blur(8px);z-index:9;
+}
+#bar .inner{
+  max-width:960px;margin:0 auto;padding:12px 24px;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+}
+#bar .tally{font-size:13px;color:var(--ink2)}
+#bar .tally b{color:var(--accent);font-size:15px}
+#bar .spacer{flex:1}
+
+/* ---------- 提示 ---------- */
+#toast{
+  position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(10px);
+  background:#16181d;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;
+  opacity:0;pointer-events:none;transition:.2s;z-index:20;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.hint{color:var(--ink3);font-size:12.5px;line-height:1.85}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>文档体检</h1>
+  <p>检查中文办公文档的排版规范问题 · 全在你自己电脑上跑，文件不上传</p>
+</header>
+
+<main>
+  <div id="drop">
+    <div class="big">把 Word 文档拖到这里</div>
+    <div class="sub">
+      也可以点一下选文件　·　支持 <b>.docx</b> 和 <b>.md</b>
+    </div>
+    <input type="file" id="file" accept=".docx,.md,.markdown,.txt">
+  </div>
+
+  <div id="filebar" hidden>
+    <span class="name"></span>
+    <span class="meta"></span>
+    <span class="spacer"></span>
+    <button class="btn ghost" id="reload">换一个文件</button>
+  </div>
+
+  <div id="summary" hidden></div>
+  <div id="report"></div>
+</main>
+
+<div id="bar" hidden>
+  <div class="inner">
+    <span class="tally"></span>
+    <span class="spacer"></span>
+    <button class="btn" id="exportMd">导出待处理清单 .md</button>
+    <button class="btn primary" id="exportDoc">导出修改后的文件</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="../node_modules/jszip/dist/jszip.min.js"></script>
+<script src="engine.js"></script>
+<script src="rules.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>浏览器端到端测试</title></head>
+<body>
+<!-- 这是 ui.js 需要的骨架，跟 src/index.html 保持一致 -->
+<div id="drop"><input type="file" id="file"></div>
+<div id="filebar" hidden><span class="name"></span><span class="meta"></span><button id="reload"></button></div>
+<div id="summary" hidden></div>
+<div id="report"></div>
+<div id="bar" hidden><span class="tally"></span><button id="exportDoc"></button><button id="exportMd"></button></div>
+<div id="toast"></div>
+<pre id="RESULT">running…</pre>
+
+<script src="../node_modules/jszip/dist/jszip.min.js"></script>
+<script src="../src/engine.js"></script>
+<script src="../src/rules.js"></script>
+<script src="../src/ui.js"></script>
+<script>
+(async () => {
+  const log = [];
+  const say = s => log.push(s);
+  const R = document.getElementById('RESULT');
+  const report = document.getElementById('report');
+  const filebar = document.getElementById('filebar');
+
+  let pass = 0, fail = 0;
+  const check = (name, cond, extra) => {
+    if (cond) { pass++; say('  ✓ ' + name); }
+    else { fail++; say('  ✗ ' + name + (extra ? '　' + extra : '')); }
+  };
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+
+  // 拦下下载，把 blob 和文件名抓出来检查
+  const got = [];
+  URL.createObjectURL = blob => { got.push(blob); return 'blob:fake'; };
+  URL.revokeObjectURL = () => {};
+  const realClick = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function () { got[got.length - 1]._name = this.download; };
+
+  window.addEventListener('error', e => { fail++; say('  ✗ 未捕获错误：' + e.message); });
+
+  // 造一个最小可用的 docx
+  async function makeDocx(text) {
+    const zip = new JSZip();
+    zip.file('[Content_Types].xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '</Types>');
+    zip.file('_rels/.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '</Relationships>');
+    zip.file('word/document.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+      '<w:p><w:r><w:t>' + text + '</w:t></w:r></w:p>' +
+      '</w:body></w:document>');
+    return zip.generateAsync({ type: 'blob' });
+  }
+
+  function drop(name, blob) {
+    const dt = new DataTransfer();
+    dt.items.add(new File([blob], name));
+    document.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true }));
+  }
+
+  async function settle() {
+    for (let i = 0; i < 60; i++) { await wait(50); if (report.innerHTML) return; }
+  }
+
+  try {
+    // ---------- 一、Markdown ----------
+    say('【Markdown 流程】');
+    const md = '# 转行指南\n\n这份指南写给准备2027届的同学，重点讲PRD怎么写。\n\n' +
+      '```js\nconst a=1;  // 中文注释English\n```\n\n' +
+      '链接：[文档](https://example.com/a,b.html) 和 https://github.com/x/y.z\n';
+    drop('sample.md', new Blob([md], { type: 'text/markdown' }));
+    await settle();
+
+    check('文件信息条显示了文件名', filebar.querySelector('.name').textContent === 'sample.md');
+    check('报告渲染出来了', report.innerHTML.length > 100);
+    const groups = report.querySelectorAll('.group');
+    check('按规则分了组', groups.length === 2, '实际 ' + groups.length + ' 组');
+    check('正文的问题被查出来了', report.querySelectorAll('input[data-role="one"]').length >= 4,
+      '实际 ' + report.querySelectorAll('input[data-role="one"]').length + ' 处');
+    check('代码块没被算成问题', !report.innerHTML.includes('注释English'));
+    check('链接地址没被动', !report.innerHTML.includes('a,b.html<') || !report.innerHTML.includes('〖.b〗'));
+    check('底部条显示了待改数量', document.querySelector('#bar .tally').textContent.includes('将自动修改'));
+
+    // 导出
+    got.length = 0;
+    document.getElementById('exportDoc').click();
+    await wait(300);
+    check('点了导出能生成文件', got.length === 1, '实际 ' + got.length + ' 个');
+    if (got.length) {
+      check('导出文件名正确', got[0]._name === 'sample-已修改.md', '实际 ' + got[0]._name);
+      const txt = await got[0].text();
+      check('导出内容里空格加上了', txt.includes('讲 PRD 怎么写'));
+      check('导出内容里代码块没动', txt.includes('const a=1;  // 中文注释English'));
+      check('导出内容里链接没动', txt.includes('https://example.com/a,b.html'));
+    }
+
+    // 清单
+    got.length = 0;
+    document.getElementById('exportMd').click();
+    await wait(200);
+    check('待处理清单能导出', got.length === 1 && got[0]._name === 'sample-待处理清单.md');
+    if (got.length) {
+      const todo = await got[0].text();
+      check('清单里有内容', todo.includes('待处理清单') && todo.includes('段'));
+    }
+
+    // ---------- 二、docx ----------
+    say('\n【Word 文档流程】');
+    document.getElementById('reload').click();
+    check('换文件后回到初始状态', report.innerHTML === '' && filebar.hidden);
+
+    const blob = await makeDocx('产品能力：PRD撰写；Office办公软件等。。');
+    drop('简历.docx', blob);
+    await settle();
+
+    check('docx 打开成功', filebar.querySelector('.meta').textContent.includes('Word 文档'));
+    const boxes = [...report.querySelectorAll('input[data-role="one"]')];
+    check('查出了问题', boxes.length > 0, '实际 ' + boxes.length + ' 处');
+    check('绿色问题默认已勾选', boxes.some(b => b.checked));
+    check('重复标点被查出来', report.innerHTML.includes('。。'));
+
+    got.length = 0;
+    document.getElementById('exportDoc').click();
+    await wait(500);
+    check('docx 导出成功', got.length === 1, '实际 ' + got.length + ' 个');
+    if (got.length) {
+      check('导出文件名正确', got[0]._name === '简历-已修改.docx', '实际 ' + got[0]._name);
+      // 把导出的 docx 重新解开，确认改对了
+      const z2 = await JSZip.loadAsync(await got[0].arrayBuffer());
+      const xml2 = await z2.file('word/document.xml').async('string');
+      const d2 = DocEngine.parseDocx(xml2);
+      const text = d2.paragraphs.map(p => p.text).join('|');
+      say('    导出后的正文：' + text);
+      check('PRD 后面加了空格', text.includes('PRD 撰写'));
+      check('Office 后面加了空格', text.includes('Office 办公'));
+      check('重复句号被合并', text.includes('等。') && !text.includes('。。'));
+      check('文字没丢', text.includes('产品能力'));
+      check('XML 结构还完整', xml2.includes('<w:body>') && xml2.includes('</w:document>'));
+    }
+  } catch (e) {
+    fail++;
+    say('  ✗ 抛异常：' + (e && e.stack || e));
+  }
+
+  say('\n结果：' + pass + ' 通过 / ' + fail + ' 失败');
+  R.textContent = log.join('\n');
+})();
+</script>
+</body>
+</html>
